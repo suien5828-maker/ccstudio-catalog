@@ -66,10 +66,12 @@ input[readonly] { background: #F5F3EF; color: #6B6B80; }
         <label>每公斤運費 NT$</label>
         <input type="number" id="g-shipping" value="220" oninput="updateCalc()">
       </div>
-      <div style="align-self:flex-end;color:#6B6B80;font-size:12px">
-        公式：日幣 × 匯率 + 重量(kg) × 每kg運費
+      <div style="align-self:flex-end">
+        <button class="btn-primary" onclick="saveSettings()" style="padding:8px 16px;font-size:12px">💾 儲存設定</button>
+        <div id="settings-msg" style="font-size:11px;color:#2E7D32;margin-top:4px;display:none">✓ 已儲存，客人頁面即時更新</div>
       </div>
     </div>
+    <div style="font-size:11px;color:#A0A0B8;margin-top:8px">公式：日幣 × 匯率 + 重量(kg) × 每kg運費　→　改完記得按儲存，客人頁面會即時更新！</div>
   </div>
 
   <!-- 新增商品 -->
@@ -237,19 +239,47 @@ async function addProduct() {
   ['f-name','f-desc','f-jpy','f-calc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-weight').value = '0.5';
   removeImg();
-  await loadProducts();
+  await loadSettings();
+loadProducts();
 }
 
 async function toggleActive(id, current) {
   await sb.from('products').update({ is_active: !current }).eq('id', id);
-  await loadProducts();
+  await loadSettings();
+loadProducts();
 }
 
 async function deleteProduct(id) {
   const pwd = prompt('請輸入刪除密碼：');
   if (pwd !== '888') { alert('密碼錯誤！'); return; }
   await sb.from('products').delete().eq('id', id);
-  await loadProducts();
+  await loadSettings();
+loadProducts();
+}
+
+async function loadSettings() {
+  const { data } = await sb.from('settings').select('*');
+  if (data) {
+    data.forEach(s => {
+      if (s.key === 'rate') document.getElementById('g-rate').value = s.value;
+      if (s.key === 'shipping_per_kg') document.getElementById('g-shipping').value = s.value;
+    });
+    updateCalc();
+  }
+}
+
+async function saveSettings() {
+  const rate = parseFloat(document.getElementById('g-rate').value) || 0.3;
+  const shipping = parseFloat(document.getElementById('g-shipping').value) || 220;
+  await sb.from('settings').upsert([
+    { key: 'rate', value: rate },
+    { key: 'shipping_per_kg', value: shipping }
+  ]);
+  const msg = document.getElementById('settings-msg');
+  msg.style.display = 'block';
+  setTimeout(() => msg.style.display = 'none', 3000);
+  await loadSettings();
+loadProducts(); // Re-render with new prices
 }
 
 async function loadProducts() {
@@ -288,6 +318,7 @@ function renderProducts() {
   }).join('');
 }
 
+loadSettings();
 loadProducts();
 </script>
 </body>
