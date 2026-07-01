@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CC 選物 - 商品管理</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #F5F3EF; font-family: 'PingFang TC','Noto Sans TC',sans-serif; min-height: 100vh; }
+.header { background: #1A1A2E; padding: 18px 20px; border-bottom: 3px solid #E8A87C; }
+.header-eyebrow { font-size: 10px; letter-spacing: 4px; color: #E8A87C; margin-bottom: 4px; }
+.header h1 { color: #fff; font-size: 20px; font-weight: 700; }
+.header p { color: #A0A0B8; font-size: 11px; margin-top: 2px; }
+.main { max-width: 900px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.card { background: #fff; border-radius: 12px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border: 1px solid #E8E4DF; }
+.card-title { font-weight: 700; color: #1A1A2E; font-size: 14px; margin-bottom: 14px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-group { display: flex; flex-direction: column; }
+.form-group.full { grid-column: 1/-1; }
+label { font-size: 11px; font-weight: 600; color: #6B6B80; margin-bottom: 4px; }
+input, select, textarea { width: 100%; border: 1.5px solid #DDD8D0; border-radius: 8px; padding: 9px 11px; font-size: 13px; color: #1A1A2E; background: #FAFAF8; outline: none; font-family: inherit; }
+input:focus, select:focus { border-color: #E8A87C; }
+input[readonly] { background: #F5F3EF; color: #6B6B80; }
+.btn-primary { background: #1A1A2E; color: #E8A87C; border: none; border-radius: 8px; padding: 11px 24px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.btn-secondary { background: transparent; border: 1.5px solid #1A1A2E; color: #1A1A2E; border-radius: 8px; padding: 8px 16px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.btn-danger { background: transparent; border: 1px solid #E0BCBC; border-radius: 6px; color: #D64045; font-size: 11px; padding: 4px 10px; cursor: pointer; font-family: inherit; }
+.upload-zone { width: 80px; height: 80px; border: 2px dashed #C8C4BE; border-radius: 10px; cursor: pointer; background: #FAFAF8; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; }
+.upload-zone:hover { border-color: #E8A87C; }
+.product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.product-card { background: #fff; border-radius: 12px; overflow: hidden; border: 1px solid #E8E4DF; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+.product-img { width: 100%; height: 180px; object-fit: cover; display: block; background: #F0EDEA; }
+.product-img-placeholder { width: 100%; height: 180px; background: #F0EDEA; display: flex; align-items: center; justify-content: center; font-size: 32px; }
+.product-body { padding: 12px; }
+.product-name { font-weight: 700; color: #1A1A2E; font-size: 14px; margin-bottom: 4px; }
+.product-price { font-size: 18px; font-weight: 700; color: #E8A87C; margin-bottom: 4px; }
+.product-meta { font-size: 11px; color: #A0A0B8; margin-bottom: 10px; }
+.product-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.badge-active { background: #E8F5E9; color: #2E7D32; border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; }
+.badge-inactive { background: #F0F0F8; color: #A0A0B8; border-radius: 4px; padding: 2px 8px; font-size: 10px; font-weight: 600; }
+.settings-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.settings-row input { width: 100px; }
+.empty { text-align: center; color: #B0AAA4; font-size: 13px; padding: 40px 0; }
+.loading { text-align: center; color: #A0A0B8; font-size: 12px; padding: 28px 0; }
+.success { color: #2E7D32; font-size: 12px; margin-top: 8px; }
+.error { color: #D64045; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-eyebrow">工作人員管理</div>
+  <h1>CC 選物 商品上架</h1>
+  <p>新增商品、設定售價、管理上架狀態</p>
+</div>
+
+<div class="main">
+  <!-- 全域設定 -->
+  <div class="card">
+    <div class="card-title">💱 全域換算設定</div>
+    <div class="settings-row">
+      <div>
+        <label>匯率（¥1 = NT$?）</label>
+        <input type="number" id="g-rate" step="0.01" value="0.3" oninput="updateCalc()">
+      </div>
+      <div>
+        <label>每公斤運費 NT$</label>
+        <input type="number" id="g-shipping" value="220" oninput="updateCalc()">
+      </div>
+      <div style="align-self:flex-end;color:#6B6B80;font-size:12px">
+        公式：日幣 × 匯率 + 重量(kg) × 每kg運費
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增商品 -->
+  <div class="card">
+    <div class="card-title">＋ 新增商品</div>
+    <div style="display:flex;gap:14px;align-items:flex-start">
+      <div>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+          <span style="font-size:22px">📷</span>
+        </div>
+        <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFile(this)">
+        <button class="btn-danger" id="remove-btn" style="display:none;margin-top:4px;width:80px" onclick="removeImg()">✕ 移除</button>
+      </div>
+      <div style="flex:1">
+        <div class="form-grid">
+          <div class="form-group full"><label>商品名稱 *</label><input type="text" id="f-name" placeholder="如：西松屋熊熊上衣"></div>
+          <div class="form-group full"><label>商品描述</label><input type="text" id="f-desc" placeholder="顏色、材質、適用年齡等"></div>
+          <div class="form-group"><label>日幣原價 ¥ *</label><input type="number" id="f-jpy" placeholder="如：1500" oninput="updateCalc()"></div>
+          <div class="form-group"><label>預估重量 kg</label><input type="number" id="f-weight" step="0.1" value="0.5" placeholder="如：0.5" oninput="updateCalc()"></div>
+          <div class="form-group"><label>換算台幣售價（自動）</label><input type="text" id="f-calc" readonly placeholder="自動計算"></div>
+          <div class="form-group"><label>分類</label>
+            <select id="f-category">
+              <option value="一般商品">一般商品</option>
+              <option value="好市多專區">好市多專區</option>
+              <option value="熱門商品">熱門商品</option>
+              <option value="食品/調味料">食品/調味料</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="form-msg" style="display:none;margin-top:8px"></div>
+    <button class="btn-primary" id="add-btn" onclick="addProduct()" style="margin-top:14px">＋ 上架商品</button>
+  </div>
+
+  <!-- 商品列表 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">已上架商品</div>
+      <div style="display:flex;gap:8px">
+        <select id="filter-cat" onchange="renderProducts()" style="border:1.5px solid #DDD8D0;border-radius:6px;padding:6px 10px;font-size:12px;color:#1A1A2E;background:#FAFAF8;outline:none;font-family:inherit">
+          <option value="">全部分類</option>
+          <option value="好市多專區">好市多專區</option>
+          <option value="熱門商品">熱門商品</option>
+          <option value="食品/調味料">食品/調味料</option>
+          <option value="一般商品">一般商品</option>
+        </select>
+        <button class="btn-secondary" onclick="loadProducts()">🔄 重整</button>
+      </div>
+    </div>
+    <div class="loading" id="loading">載入中…</div>
+    <div class="product-grid" id="product-grid"></div>
+  </div>
+</div>
+
+<script>
+const SURL = 'https://zwabpiysvlqvqunauwyj.supabase.co';
+const SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3YWJwaXlzdmxxdnF1bmF1d3lqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMTA1MzgsImV4cCI6MjA5NzY4NjUzOH0.-jx1ikazqqKRta-8lEoifeKR9bVVm_E00m4e17q_6z8';
+const sb = window.supabase.createClient(SURL, SKEY);
+
+let products = [];
+let currentFile = null;
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function getRate() { return parseFloat(document.getElementById('g-rate').value) || 0.3; }
+function getShipping() { return parseFloat(document.getElementById('g-shipping').value) || 220; }
+function calcPrice(jpy, weight) {
+  return Math.round(jpy * getRate() + weight * getShipping());
+}
+
+function updateCalc() {
+  const jpy = parseFloat(document.getElementById('f-jpy').value) || 0;
+  const weight = parseFloat(document.getElementById('f-weight').value) || 0;
+  const el = document.getElementById('f-calc');
+  el.value = (jpy > 0) ? 'NT$' + calcPrice(jpy, weight).toLocaleString() : '';
+}
+
+function compressImage(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w = img.width, h = img.height, max = 1200;
+        if (w > max || h > max) {
+          if (w > h) { h = Math.round(h*max/w); w = max; }
+          else { w = Math.round(w*max/h); h = max; }
+        }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        let q = 0.85;
+        const tryIt = () => canvas.toBlob(blob => {
+          if (blob.size > 800*1024 && q > 0.4) { q -= 0.1; tryIt(); }
+          else resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+        }, 'image/jpeg', q);
+        tryIt();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleFile(input) {
+  if (!input.files[0]) return;
+  const file = await compressImage(input.files[0]);
+  currentFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('upload-zone').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    document.getElementById('remove-btn').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImg() {
+  currentFile = null;
+  document.getElementById('upload-zone').innerHTML = '<span style="font-size:22px">📷</span>';
+  document.getElementById('remove-btn').style.display = 'none';
+  document.getElementById('file-input').value = '';
+}
+
+function showMsg(msg, isError = false) {
+  const el = document.getElementById('form-msg');
+  el.textContent = msg;
+  el.style.color = isError ? '#D64045' : '#2E7D32';
+  el.style.display = 'block';
+  if (!isError) setTimeout(() => el.style.display = 'none', 3000);
+}
+
+async function addProduct() {
+  const name = document.getElementById('f-name').value.trim();
+  const jpy = parseFloat(document.getElementById('f-jpy').value) || 0;
+  if (!name || !jpy) { showMsg('請填寫商品名稱和日幣原價', true); return; }
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true; btn.textContent = '上架中…';
+
+  let image_url = null;
+  if (currentFile) {
+    const fname = Date.now() + '.jpg';
+    const { error: ue } = await sb.storage.from('product-image').upload(fname, currentFile);
+    if (!ue) {
+      const { data: ud } = sb.storage.from('product-image').getPublicUrl(fname);
+      image_url = ud.publicUrl;
+    }
+  }
+
+  const weight = parseFloat(document.getElementById('f-weight').value) || 0.5;
+  const { error } = await sb.from('products').insert([{
+    name,
+    description: document.getElementById('f-desc').value.trim(),
+    price_jpy: jpy,
+    weight_kg: weight,
+    category: document.getElementById('f-category').value,
+    image_url,
+    is_active: true,
+  }]);
+
+  btn.disabled = false; btn.textContent = '＋ 上架商品';
+  if (error) { showMsg('上架失敗：' + error.message, true); return; }
+  showMsg('✓ 商品已上架！');
+  ['f-name','f-desc','f-jpy','f-calc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-weight').value = '0.5';
+  removeImg();
+  await loadProducts();
+}
+
+async function toggleActive(id, current) {
+  await sb.from('products').update({ is_active: !current }).eq('id', id);
+  await loadProducts();
+}
+
+async function deleteProduct(id) {
+  const pwd = prompt('請輸入刪除密碼：');
+  if (pwd !== '888') { alert('密碼錯誤！'); return; }
+  await sb.from('products').delete().eq('id', id);
+  await loadProducts();
+}
+
+async function loadProducts() {
+  document.getElementById('loading').style.display = 'block';
+  const { data } = await sb.from('products').select('*').order('created_at', { ascending: false });
+  products = data || [];
+  document.getElementById('loading').style.display = 'none';
+  renderProducts();
+}
+
+function renderProducts() {
+  const cat = document.getElementById('filter-cat').value;
+  const filtered = cat ? products.filter(p => p.category === cat) : products;
+  const grid = document.getElementById('product-grid');
+  if (!filtered.length) { grid.innerHTML = '<div class="empty">尚無商品</div>'; return; }
+  grid.innerHTML = filtered.map(p => {
+    const twd = calcPrice(p.price_jpy, p.weight_kg);
+    return `<div class="product-card">
+      ${p.image_url
+        ? `<img src="${esc(p.image_url)}" class="product-img">`
+        : '<div class="product-img-placeholder">📦</div>'}
+      <div class="product-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+          <div class="product-name">${esc(p.name)}</div>
+          <span class="${p.is_active?'badge-active':'badge-inactive'}">${p.is_active?'上架中':'已下架'}</span>
+        </div>
+        ${p.description?`<div style="font-size:11px;color:#6B6B80;margin-bottom:6px">${esc(p.description)}</div>`:''}
+        <div class="product-price">NT$${twd.toLocaleString()}</div>
+        <div class="product-meta">¥${Number(p.price_jpy).toLocaleString()}　重量：${p.weight_kg}kg　${esc(p.category)}</div>
+        <div class="product-actions">
+          <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="toggleActive(${p.id}, ${p.is_active})">${p.is_active?'下架':'重新上架'}</button>
+          <button class="btn-danger" onclick="deleteProduct(${p.id})">🗑 刪除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+loadProducts();
+</script>
+</body>
+</html>
