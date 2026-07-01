@@ -91,7 +91,8 @@ input[readonly] { background: #F5F3EF; color: #6B6B80; }
           <div class="form-group full"><label>商品描述</label><input type="text" id="f-desc" placeholder="顏色、材質、適用年齡等"></div>
           <div class="form-group"><label>日幣原價 ¥ *</label><input type="number" id="f-jpy" placeholder="如：1500" oninput="updateCalc()"></div>
           <div class="form-group"><label>預估重量 kg</label><input type="number" id="f-weight" step="0.1" value="0.5" placeholder="如：0.5" oninput="updateCalc()"></div>
-          <div class="form-group"><label>換算台幣售價（自動）</label><input type="text" id="f-calc" readonly placeholder="自動計算"></div>
+          <div class="form-group"><label>換算台幣（自動）</label><input type="text" id="f-calc" readonly placeholder="自動計算"></div>
+          <div class="form-group"><label>直接填台幣售價</label><input type="number" id="f-twd" placeholder="填了優先使用"></div>
           <div class="form-group"><label>分類</label>
             <select id="f-category">
               <option value="一般商品">一般商品</option>
@@ -139,7 +140,8 @@ function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 
 function getRate() { return parseFloat(document.getElementById('g-rate').value) || 0.3; }
 function getShipping() { return parseFloat(document.getElementById('g-shipping').value) || 220; }
-function calcPrice(jpy, weight) {
+function calcPrice(jpy, weight, twd = 0) {
+  if (twd > 0) return twd;
   return Math.round((jpy * getRate() + weight * getShipping()) / 10) * 10;
 }
 
@@ -228,6 +230,7 @@ async function addProduct() {
     description: document.getElementById('f-desc').value.trim(),
     price_jpy: jpy,
     weight_kg: weight,
+    price_twd: parseFloat(document.getElementById('f-twd').value) || 0,
     category: document.getElementById('f-category').value,
     image_url,
     is_active: true,
@@ -236,7 +239,7 @@ async function addProduct() {
   btn.disabled = false; btn.textContent = '＋ 上架商品';
   if (error) { showMsg('上架失敗：' + error.message, true); return; }
   showMsg('✓ 商品已上架！');
-  ['f-name','f-desc','f-jpy','f-calc'].forEach(id => document.getElementById(id).value = '');
+  ['f-name','f-desc','f-jpy','f-calc','f-twd'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-weight').value = '0.5';
   removeImg();
   await loadSettings();
@@ -293,6 +296,7 @@ function openEdit(id) {
   document.getElementById('e-desc').value = p.description || '';
   document.getElementById('e-jpy').value = p.price_jpy || '';
   document.getElementById('e-weight').value = p.weight_kg || 0.5;
+  document.getElementById('e-twd').value = p.price_twd || '';
   document.getElementById('e-category').value = p.category || '一般商品';
   editFile = null;
   editCurrentImgUrl = p.image_url;
@@ -368,6 +372,7 @@ async function saveEdit() {
     description: document.getElementById('e-desc').value.trim(),
     price_jpy: jpy,
     weight_kg: parseFloat(document.getElementById('e-weight').value) || 0.5,
+    price_twd: parseFloat(document.getElementById('e-twd').value) || 0,
     category: document.getElementById('e-category').value,
     image_url,
   }).eq('id', id);
@@ -395,7 +400,7 @@ function renderProducts() {
   const grid = document.getElementById('product-grid');
   if (!filtered.length) { grid.innerHTML = '<div class="empty">尚無商品</div>'; return; }
   grid.innerHTML = filtered.map(p => {
-    const twd = calcPrice(p.price_jpy, p.weight_kg);
+    const twd = p.price_twd > 0 ? p.price_twd : calcPrice(p.price_jpy, p.weight_kg);
     return `<div class="product-card">
       ${p.image_url
         ? `<img src="${esc(p.image_url)}" class="product-img">`
@@ -407,7 +412,7 @@ function renderProducts() {
         </div>
         ${p.description?`<div style="font-size:11px;color:#6B6B80;margin-bottom:6px">${esc(p.description)}</div>`:''}
         <div class="product-price">NT$${twd.toLocaleString()}</div>
-        <div class="product-meta">¥${Number(p.price_jpy).toLocaleString()}　重量：${p.weight_kg}kg　${esc(p.category)}</div>
+        <div class="product-meta">¥${Number(p.price_jpy).toLocaleString()}　重量：${p.weight_kg}kg　${esc(p.category)}${p.price_twd>0?'　<span style="color:#E8A87C">手動定價</span>':''}</div>
         <div class="product-actions">
           <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="openEdit(${p.id})">✏️ 修改</button>
           <button class="btn-secondary" style="font-size:11px;padding:4px 10px" onclick="toggleActive(${p.id}, ${p.is_active})">${p.is_active?'下架':'重新上架'}</button>
@@ -443,6 +448,7 @@ loadProducts();
           <div class="form-group"><label>日幣原價 ¥</label><input type="number" id="e-jpy" oninput="updateEditCalc()"></div>
           <div class="form-group"><label>預估重量 kg</label><input type="number" id="e-weight" step="0.1" oninput="updateEditCalc()"></div>
           <div class="form-group"><label>換算台幣（自動）</label><input type="text" id="e-calc" readonly></div>
+          <div class="form-group"><label>直接填台幣售價</label><input type="number" id="e-twd" placeholder="填了優先使用"></div>
           <div class="form-group"><label>分類</label>
             <select id="e-category">
               <option value="一般商品">一般商品</option>
